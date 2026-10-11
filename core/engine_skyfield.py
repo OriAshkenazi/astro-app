@@ -38,7 +38,7 @@ def _kernel():
 def _ecl(eph, body, t):
     ap = eph["earth"].at(t).observe(eph[body]).apparent()
     lat, lon, _ = ap.frame_latlon(ecliptic_frame)  # true ecliptic & equinox of date
-    return lon.degrees, lat.degrees
+    return float(lon.degrees), float(lat.degrees)
 
 
 def planets_at(utc_dt) -> tuple[list[dict], object]:
@@ -56,10 +56,10 @@ def planets_at(utc_dt) -> tuple[list[dict], object]:
 
 
 def angles_and_cusps(t, lat: float, lon: float, system: str = "placidus") -> dict:
-    gast_h = t.gast
+    gast_h = float(t.gast)
     ramc = norm(gast_h * 15.0 + lon)
     dpsi, deps = t._nutation_angles_radians
-    eps = t._mean_obliquity_radians + deps
+    eps = float(t._mean_obliquity_radians + deps)
     phi = math.radians(lat)
     R = math.radians(ramc)
     mc = norm(math.degrees(math.atan2(math.sin(R), math.cos(R) * math.cos(eps))))
@@ -135,7 +135,7 @@ def aspects_for(points: list[tuple[str, float, float | None]], angle_names=("ASC
 
 def compute(utc_dt, lat: float, lon: float, time_known: bool = True) -> dict:
     planets, t = planets_at(utc_dt)
-    out = {"engine": ENGINE_NAME, "planets": planets, "jd_ut": t.ut1, "jd_tt": t.tt,
+    out = {"engine": ENGINE_NAME, "planets": planets, "jd_ut": float(t.ut1), "jd_tt": float(t.tt),
            "delta_t_seconds": float(t.delta_t), "angles": None, "cusps": None, "house_system": None}
     pts = [(p["name"], p["lon"], p["speed"]) for p in planets]
     if time_known:

@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 
 from core.canonical import BirthInput, build_chart
 
@@ -27,3 +28,9 @@ def test_polar_latitude_falls_back_to_porphyry():
     if c["settings"]["house_system"] == "Porphyry":
         assert "house_system_note" in c["settings"]
     assert len(c["houses"]) == 12 and sum(len(h["occupants"]) for h in c["houses"]) == 10
+
+
+def test_chart_is_plain_json():
+    c, _ = build_chart(BirthInput(dt.date(1987, 6, 3), dt.time(14, 45), -34.6037, -58.3816,
+                                  "America/Argentina/Buenos_Aires", "Buenos Aires"))
+    assert json.loads(json.dumps(c, allow_nan=False)) == c
