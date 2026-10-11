@@ -21,9 +21,13 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and milesto
 
 ## Status
 
-Milestone 1 (calculation core) is in progress:
-- Done: `core/` calculation, gate, canonical builder and sensitivity scan.
-- Next: wheel, deterministic tables and text checks.
+Milestone 1 (core) is complete:
+- two-engine calculation with the G1 gate, canonical builder and birth-time sensitivity scan;
+- G2/G3 text gates (`core/checks.py`);
+- interactive SVG wheel with `data-factor` targets (`core/wheel.py`);
+- deterministic reading sections 1–5 (`core/tables.py`).
+
+Next: Milestone 2, Sign in with ChatGPT and the LLM client.
 
 ## Development
 
