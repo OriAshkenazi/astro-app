@@ -18,7 +18,7 @@ from .constants import ASPECT_ANGLES, PLANETS, house_of, norm, orb_limit, separa
 
 BODIES = dict(zip(PLANETS, ["sun", "moon", "mercury", "venus", "mars barycenter", "jupiter barycenter",
                             "saturn barycenter", "uranus barycenter", "neptune barycenter", "pluto barycenter"]))
-ENGINE_NAME = "Skyfield + JPL DE421; angles and houses by own spherical-astronomy code"
+ENGINE_NAME = "Skyfield with the JPL DE421 ephemeris (angles and houses by own spherical-astronomy code)"
 
 
 class PlacidusUndefined(ValueError):

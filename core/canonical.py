@@ -188,6 +188,7 @@ def build_chart(b: BirthInput) -> tuple[dict, GateReport]:
                   "lat_dms": coord_dms(b.lat, "N", "S"), "lon_dms": coord_dms(b.lon, "E", "W")},
         "time": {"tz_name": rt.tz_name, "utc_offset_hours": rt.utc_offset_hours, "dst_in_effect": rt.dst_in_effect,
                  "dst_period": describe_transitions(rt.year_transitions),
+                 "year_transitions": rt.year_transitions,
                  "utc_datetime": rt.utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                  "jd_ut": round(sky["jd_ut"], 6), "jd_tt": round(sky["jd_tt"], 6),
                  "delta_t_seconds": round(sky["delta_t_seconds"], 3), "zone_abbrev": rt.abbrev,
