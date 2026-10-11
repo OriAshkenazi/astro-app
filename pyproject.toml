@@ -2,7 +2,7 @@
 name = "astro-app"
 version = "0.1.0"
 description = "Open-source natal chart reading app: gated two-engine calculation + agentic interpretation via Sign in with ChatGPT"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "pyswisseph>=2.10",
     "skyfield>=1.55",
@@ -16,3 +16,10 @@ dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["core*"]
