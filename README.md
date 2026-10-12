@@ -27,7 +27,20 @@ Milestone 1 (core) is complete:
 - interactive SVG wheel with `data-factor` targets (`astro_app/core/wheel.py`);
 - deterministic reading sections 1–5 (`astro_app/core/tables.py`).
 
-Next: Milestone 2, Sign in with ChatGPT and the LLM client.
+Milestone 2 (Sign in with ChatGPT + LLM client) is implemented and awaiting a first real-account test:
+- `astro_app/auth`: OpenAI's open-source SIWC flow (dynamic registration, loopback callback, verified ID tokens,
+  rotating refresh, revocation);
+- `astro_app/llm`: Responses API client on the user's ChatGPT plan, plus a fake client for tests.
+
+Try it:
+
+```bash
+astro-app login     # Continue with ChatGPT in your browser
+astro-app ping      # one tiny request on your ChatGPT plan
+astro-app chart --date 2001-05-10 --time 14:30 --lat 51.5074 --lon -0.1278 --tz Europe/London --place London
+```
+
+Next: Milestone 3, the local server and reading workflow.
 
 ## Development
 
