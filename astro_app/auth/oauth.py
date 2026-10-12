@@ -62,9 +62,15 @@ class InvalidClient(AuthError):
 
 
 class TokenEndpointError(AuthError):
-    def __init__(self, status: int, code: str | None, request_id: str | None):
-        self.status, self.code, self.request_id = status, code, request_id
-        super().__init__(f"token endpoint HTTP {status} code={code} request_id={request_id}")
+    def __init__(self, status: int, code: str | None, request_id: str | None, description: str | None = None):
+        self.status, self.code, self.request_id, self.description = status, code, request_id, description
+        super().__init__(f"token endpoint HTTP {status} error={code} description={description!r} "
+                         f"request_id={request_id}")
+
+
+class CodeExchangeRejected(AuthError):
+    """The token endpoint refused the authorization code; start a fresh authorization."""
+    user_message = "ChatGPT rejected the sign-in code. Please run the sign-in again."
 
 
 REFRESH_UNUSABLE = {"invalid_grant", "invalid_refresh_token", "token_expired", "refresh_token_expired",
@@ -153,31 +159,34 @@ class IdTokenVerifier:
         return claims
 
 
-def _error_code(r: httpx.Response) -> str | None:
-    """OAuth error body: {"error": "invalid_grant"} or {"error": {"code": ...}} or {"code": ...}."""
+def _error_info(r: httpx.Response) -> tuple[str | None, str | None]:
+    """(code, description) from {"error": "x", "error_description": ...}, {"error": {"code", "message"}},
+    {"code": ...} or {"detail": ...}. Descriptions are diagnostic text and never contain credentials."""
     try:
         body = r.json()
     except ValueError:
-        return None
+        return None, r.text[:200] or None
     if not isinstance(body, dict):
-        return None
+        return None, None
     err = body.get("error")
     if isinstance(err, dict):
-        return err.get("code")
-    return err if isinstance(err, str) else body.get("code")
+        return err.get("code"), err.get("message")
+    desc = body.get("error_description") or body.get("message") or body.get("detail")
+    return (err if isinstance(err, str) else body.get("code")), (str(desc)[:300] if desc else None)
 
 
 async def _token_request(http: httpx.AsyncClient, data: dict) -> dict:
     r = await http.post(C.TOKEN_URL, data=data, headers={"accept": "application/json"})
     if r.status_code == 200:
         return r.json()
-    code = _error_code(r)
+    code, desc = _error_info(r)
     rid = r.headers.get("openai-request-id") or r.headers.get("x-request-id")
+    detail = f"HTTP {r.status_code} error={code} description={desc!r} request_id={rid}"
     if code in REFRESH_UNUSABLE:
-        raise InvalidGrant(f"{code} (request_id={rid})")
+        raise InvalidGrant(detail)
     if code == "invalid_client":
-        raise InvalidClient(f"invalid_client (request_id={rid})")
-    raise TokenEndpointError(r.status_code, code, rid)
+        raise InvalidClient(detail)
+    raise TokenEndpointError(r.status_code, code, rid, desc)
 
 
 async def complete(pending: PendingAuth | None, params: dict, http: httpx.AsyncClient, store: CredentialStore,
@@ -202,9 +211,12 @@ async def complete(pending: PendingAuth | None, params: dict, http: httpx.AsyncC
             raise ClientMismatch("callback client_id differs from the selected registration")
         client_id = pending.client_id
 
-    tok = await _token_request(http, {"grant_type": "authorization_code", "client_id": client_id, "code": code,
-                                      "code_verifier": pending.code_verifier, "redirect_uri": pending.redirect_uri,
-                                      "resource": C.RESOURCE})
+    try:
+        tok = await _token_request(http, {"grant_type": "authorization_code", "client_id": client_id, "code": code,
+                                          "code_verifier": pending.code_verifier,
+                                          "redirect_uri": pending.redirect_uri, "resource": C.RESOURCE})
+    except (InvalidGrant, InvalidClient, TokenEndpointError) as e:
+        raise CodeExchangeRejected(f"code exchange for client {client_id[:10]}…: {e}") from e
     if not isinstance(tok.get("id_token"), str) or not tok.get("access_token"):
         raise AuthError("token response missing id_token or access_token")
     claims = await verifier.verify(tok["id_token"], audience=client_id, nonce=pending.nonce)

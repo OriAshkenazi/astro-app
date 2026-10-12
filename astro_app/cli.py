@@ -51,17 +51,31 @@ async def _login(args) -> int:
                 return 1
         try:
             params = await listener.wait()
+            if args.debug:
+                _out("debug: " + _redacted_callback(params, listener.redirect_uri))
             cred = await oauth.complete(pending, params, http, store, oauth.IdTokenVerifier(http))
         except asyncio.TimeoutError:
             _out("Sign-in timed out after 10 minutes.")
             return 1
         except oauth.AuthError as e:
             _out(e.user_message)
+            if args.debug:
+                _out(f"debug: {type(e).__name__}: {e}")
+            else:
+                _out("Run `astro-app login --debug` for details to report.")
             return 1
     _out(f"Signed in as {cred.label()}.")
     _out("ChatGPT plan usage: " + ("enabled." if cred.plan_enabled else
                                    "NOT granted. Run `astro-app login --enable-plan` to grant it."))
     return 0
+
+
+def _redacted_callback(params: dict, redirect: str) -> str:
+    """Callback summary that is safe to share: parameter names, client-id prefix, scopes, never the code."""
+    shown = {k: ("<present>" if k in ("code", "state") else v) for k, v in params.items()}
+    if "client_id" in shown:
+        shown["client_id"] = shown["client_id"][:10] + "…"
+    return f"callback on {redirect} with {shown}"
 
 
 def _accounts(args) -> int:
@@ -160,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("login", help="Continue with ChatGPT")
     s.add_argument("--account", help="email or client id of a saved account (default: register a new one)")
     s.add_argument("--enable-plan", action="store_true", help="ask again for ChatGPT plan usage after a decline")
+    s.add_argument("--debug", action="store_true", help="print redacted diagnostics if sign-in fails")
     sub.add_parser("accounts", help="list saved ChatGPT accounts")
     sub.add_parser("models", help="list models on your ChatGPT plan")
     s = sub.add_parser("ping", help="one tiny inference on your ChatGPT plan")

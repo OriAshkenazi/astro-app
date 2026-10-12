@@ -235,3 +235,14 @@ async def test_loopback_listener_returns_callback_params():
         params = await lis.wait(timeout=5)
     assert miss.status_code == 404 and hit.status_code == 200 and "close this tab" in hit.text
     assert params == {"code": "abc", "state": "xyz", "client_id": "oaiapp_1"}
+
+
+async def test_rejected_code_exchange_is_reported_with_details(fake, store):
+    pending, url = oauth.start(REDIRECT, HOST)
+    params = fake.authorize(url)
+    fake.codes.clear()  # server no longer knows the code
+    async with fake.client() as http:
+        with pytest.raises(oauth.CodeExchangeRejected) as e:
+            await oauth.complete(pending, params, http, store, oauth.IdTokenVerifier(http))
+    assert "error=invalid_grant" in str(e.value) and "sign-in code" in e.value.user_message
+    assert params["code"] not in str(e.value)
