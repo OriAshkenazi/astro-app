@@ -6,7 +6,9 @@ and returns the query parameters. The listener is started before the browser is 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import socket
+import time
 from urllib.parse import parse_qsl, urlsplit
 
 from . import config as C
@@ -26,11 +28,24 @@ def free_port(preferred: int = C.DEFAULT_PORT) -> int:
     raise OSError("no free loopback port")
 
 
+def _describe(parts: list[str], target) -> str:
+    """One redacted line per request: time, method, path, parameter names, code length + fingerprint."""
+    stamp = f"{time.monotonic():.3f}"
+    if target is None:
+        return f"{stamp} {parts[0] if parts else '?'} (ignored)"
+    q = dict(parse_qsl(target.query))
+    fp = ""
+    if "code" in q:
+        fp = f" code[len={len(q['code'])} sha256:{hashlib.sha256(q['code'].encode()).hexdigest()[:8]}]"
+    return f"{stamp} {parts[0]} {target.path} params={sorted(q)}{fp}"
+
+
 class CallbackListener:
     def __init__(self, port: int):
         self.port = port
         self._result: asyncio.Future[dict] | None = None
         self._server: asyncio.base_events.Server | None = None
+        self.hits: list[str] = []  # redacted log of every request, for --debug
 
     @property
     def redirect_uri(self) -> str:
@@ -56,6 +71,7 @@ class CallbackListener:
                 pass
             parts = line.split()
             target = urlsplit(parts[1]) if len(parts) >= 2 and parts[0] == "GET" else None
+            self.hits.append(_describe(parts, target))
             if target is None or target.path != C.CALLBACK_PATH or self._result.done():
                 writer.write(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 return

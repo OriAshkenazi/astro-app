@@ -300,3 +300,8 @@ async def test_interactive_sign_in_gives_up_after_second_rejection(fake, store):
         with pytest.raises(oauth.CodeExchangeRejected):
             await sign_in(store, http, _browser(fake, []), port=0, timeout=5)
     assert [a.registered_only for a in store.accounts()] == [True]
+
+
+def test_identity_only_url_requests_no_plan_scopes():
+    _, url = oauth.start(REDIRECT, HOST, identity_only=True)
+    assert _q(url)["scope"] == "openid profile email"

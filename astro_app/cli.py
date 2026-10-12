@@ -50,7 +50,7 @@ async def _login(args) -> int:
     async with httpx.AsyncClient() as http:
         try:
             cred = await sign_in(store, http, webbrowser.open, account, enable_plan=args.enable_plan, log=_out,
-                                 debug=debug)
+                                 debug=debug, identity_only=args.identity_only)
         except asyncio.TimeoutError:
             _out("Sign-in timed out after 10 minutes.")
             return 1
@@ -164,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--enable-plan", action="store_true", help="ask again for ChatGPT plan usage after a decline")
     s.add_argument("--new", action="store_true", help="register another ChatGPT account")
     s.add_argument("--debug", action="store_true", help="print redacted diagnostics if sign-in fails")
+    s.add_argument("--identity-only", action="store_true",
+                   help="diagnostic: sign in without the ChatGPT plan permission (readings stay disabled)")
     sub.add_parser("accounts", help="list saved ChatGPT accounts")
     sub.add_parser("models", help="list models on your ChatGPT plan")
     s = sub.add_parser("ping", help="one tiny inference on your ChatGPT plan")
@@ -184,7 +186,11 @@ def main(argv: list[str] | None = None) -> int:
         return _accounts(args)
     if args.cmd == "chart":
         return _chart(args)
-    return asyncio.run({"login": _login, "models": _models, "ping": _ping, "logout": _logout}[args.cmd](args))
+    try:
+        return asyncio.run({"login": _login, "models": _models, "ping": _ping, "logout": _logout}[args.cmd](args))
+    except KeyboardInterrupt:
+        _out("\nCancelled.")
+        return 130
 
 
 if __name__ == "__main__":

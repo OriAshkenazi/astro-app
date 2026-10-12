@@ -106,14 +106,15 @@ class PendingAuth:
 
 
 def start(redirect_uri: str, host_id: str, account: Credential | None = None,
-          force_consent: bool = False) -> tuple[PendingAuth, str]:
+          force_consent: bool = False, identity_only: bool = False) -> tuple[PendingAuth, str]:
+    """`identity_only` requests openid/profile/email without plan usage (diagnostics; no inference)."""
     verifier = _b64url(secrets.token_bytes(32))  # 43 chars, as in the reference client
     pending = PendingAuth(state=_b64url(secrets.token_bytes(24)), nonce=_b64url(secrets.token_bytes(24)),
                           code_verifier=verifier, redirect_uri=redirect_uri,
                           client_id=account.client_id if account else C.DYNAMIC_CLIENT, host_id=host_id,
                           expected_subject=(account.subject or None) if account else None)
     params = {"client_id": pending.client_id, "response_type": "code", "redirect_uri": redirect_uri,
-              "scope": C.SCOPE, "resource": C.RESOURCE, "state": pending.state, "nonce": pending.nonce,
+              "scope": " ".join(C.IDENTITY_SCOPES) if identity_only else C.SCOPE, "resource": C.RESOURCE, "state": pending.state, "nonce": pending.nonce,
               "code_challenge_method": "S256",
               "code_challenge": _b64url(hashlib.sha256(verifier.encode()).digest()),
               "ext_agent_host_id": host_id}
