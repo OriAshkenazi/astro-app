@@ -79,6 +79,11 @@ class Credential:
         d.update(access_token=None, refresh_token=None, id_token=None, expires_in=0, earliest_refresh_at=None)
         return Credential(**d)
 
+    @property
+    def registered_only(self) -> bool:
+        """Issued client ID saved, but no successful sign-in yet."""
+        return not self.subject
+
     def label(self) -> str:
         return f"{self.email or self.name or 'ChatGPT account'} ({self.client_id[-6:]})"
 

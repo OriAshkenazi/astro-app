@@ -65,7 +65,7 @@ async def test_reauthorization_url_uses_issued_client_and_hints(fake, store):
     _, url = oauth.start(REDIRECT, HOST, cred)
     q = _q(url)
     assert q["client_id"] == fake.issued_client_id and "agent_name_hint" not in q
-    assert q["id_token_hint"] == cred.id_token and q["login_hint"] == fake.email
+    assert "id_token_hint" not in q and q["login_hint"] == fake.email  # no tokens in browser URLs
 
 
 def test_each_attempt_is_fresh():
@@ -132,7 +132,7 @@ async def test_reauth_rejects_other_account(fake, store):
     assert store.load(cred.client_id).access_token == cred.access_token  # untouched
 
 
-@pytest.mark.parametrize("override", [{"nonce": "wrong"}, {"aud": "oaiapp_other"}, {"iss": "https://evil.example"},
+@pytest.mark.parametrize("override", [{"nonce": "wrong"}, {"aud": "oaiapp_other"}, {"azp": "oaiapp_other"}, {"iss": "https://evil.example"},
                                       {"exp": int(time.time()) - 600}, "badsig"])
 async def test_id_token_validation(fake, store, override):
     if override == "badsig":
@@ -141,7 +141,7 @@ async def test_id_token_validation(fake, store, override):
         fake.id_token_overrides = override
     with pytest.raises(oauth.AuthError):
         await _sign_in(fake, store)
-    assert store.accounts() == []
+    assert not any(a.signed_in for a in store.accounts())  # at most the issued registration is kept
 
 
 async def test_without_plan_scope_sign_in_kept_but_inference_disabled(fake, store):
@@ -226,9 +226,9 @@ def test_host_id_is_stable_and_opaque(tmp_path):
 
 
 async def test_loopback_listener_returns_callback_params():
-    port = free_port(0)
-    async with CallbackListener(port) as lis:
-        assert lis.redirect_uri == f"http://127.0.0.1:{port}/auth/callback"
+    async with CallbackListener(0) as lis:
+        port = lis.port
+        assert port > 0 and lis.redirect_uri == f"http://127.0.0.1:{port}/auth/callback"
         async with httpx.AsyncClient() as http:
             miss = await http.get(f"http://127.0.0.1:{port}/other")
             hit = await http.get(f"{lis.redirect_uri}?code=abc&state=xyz&client_id=oaiapp_1")
@@ -246,3 +246,57 @@ async def test_rejected_code_exchange_is_reported_with_details(fake, store):
             await oauth.complete(pending, params, http, store, oauth.IdTokenVerifier(http))
     assert "error=invalid_grant" in str(e.value) and "sign-in code" in e.value.user_message
     assert params["code"] not in str(e.value)
+
+
+async def test_rejected_registration_exchange_keeps_issued_client(fake, store):
+    pending, url = oauth.start(REDIRECT, HOST)
+    params = fake.authorize(url)
+    fake.codes.clear()
+    async with fake.client() as http:
+        with pytest.raises(oauth.CodeExchangeRejected) as e:
+            await oauth.complete(pending, params, http, store, oauth.IdTokenVerifier(http))
+    saved = store.load(fake.issued_client_id)
+    assert e.value.client_id == fake.issued_client_id and saved.registered_only and not saved.signed_in
+    # documented recovery: re-authorize with the issued client id, which then completes
+    cred = await _sign_in(fake, store, saved)
+    assert cred.client_id == fake.issued_client_id and cred.subject == fake.subject and cred.signed_in
+    assert len(store.accounts()) == 1
+
+
+# ---------------------------------------------------------------- interactive flow
+def _browser(fake, port_holder):
+    """Simulated browser: visits the authorize URL, then follows the redirect to the loopback callback."""
+    tasks = []
+
+    def open_browser(url):
+        q = _q(url)
+        params = fake.authorize(url)
+
+        async def follow():
+            async with httpx.AsyncClient() as real:
+                await real.get(q["redirect_uri"], params=params)
+        tasks.append(asyncio.ensure_future(follow()))
+        port_holder.append(q)
+        return True
+    return open_browser
+
+
+async def test_interactive_sign_in_recovers_from_rejected_first_exchange(fake, store):
+    from astro_app.auth.flow import sign_in
+    fake.reject_next_exchanges = 1
+    seen, logs = [], []
+    async with fake.client() as http:
+        cred = await sign_in(store, http, _browser(fake, seen), log=logs.append, port=0, timeout=5)
+    assert cred.signed_in and cred.client_id == fake.issued_client_id
+    assert [q["client_id"] for q in seen] == ["dynamic_agent_client", fake.issued_client_id]
+    assert "agent_name_hint" not in seen[1] and any("once more" in m for m in logs)
+    assert len(store.accounts()) == 1
+
+
+async def test_interactive_sign_in_gives_up_after_second_rejection(fake, store):
+    from astro_app.auth.flow import sign_in
+    fake.reject_next_exchanges = 2
+    async with fake.client() as http:
+        with pytest.raises(oauth.CodeExchangeRejected):
+            await sign_in(store, http, _browser(fake, []), port=0, timeout=5)
+    assert [a.registered_only for a in store.accounts()] == [True]

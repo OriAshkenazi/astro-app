@@ -69,8 +69,13 @@ class TokenEndpointError(AuthError):
 
 
 class CodeExchangeRejected(AuthError):
-    """The token endpoint refused the authorization code; start a fresh authorization."""
+    """The token endpoint refused the authorization code. Recovery (per the SIWC docs): start a
+    fresh authorization with the issued client ID, which `complete()` has already saved."""
     user_message = "ChatGPT rejected the sign-in code. Please run the sign-in again."
+
+    def __init__(self, message: str, client_id: str):
+        self.client_id = client_id
+        super().__init__(message)
 
 
 REFRESH_UNUSABLE = {"invalid_grant", "invalid_refresh_token", "token_expired", "refresh_token_expired",
@@ -102,11 +107,11 @@ class PendingAuth:
 
 def start(redirect_uri: str, host_id: str, account: Credential | None = None,
           force_consent: bool = False) -> tuple[PendingAuth, str]:
-    verifier = _b64url(secrets.token_bytes(48))
+    verifier = _b64url(secrets.token_bytes(32))  # 43 chars, as in the reference client
     pending = PendingAuth(state=_b64url(secrets.token_bytes(24)), nonce=_b64url(secrets.token_bytes(24)),
                           code_verifier=verifier, redirect_uri=redirect_uri,
                           client_id=account.client_id if account else C.DYNAMIC_CLIENT, host_id=host_id,
-                          expected_subject=account.subject if account else None)
+                          expected_subject=(account.subject or None) if account else None)
     params = {"client_id": pending.client_id, "response_type": "code", "redirect_uri": redirect_uri,
               "scope": C.SCOPE, "resource": C.RESOURCE, "state": pending.state, "nonce": pending.nonce,
               "code_challenge_method": "S256",
@@ -114,11 +119,9 @@ def start(redirect_uri: str, host_id: str, account: Credential | None = None,
               "ext_agent_host_id": host_id}
     if account is None:
         params["agent_name_hint"] = C.AGENT_NAME
-    else:
-        if account.id_token:
-            params["id_token_hint"] = account.id_token
-        if account.email:
-            params["login_hint"] = account.email
+    elif account.email:
+        # login_hint only: browser URLs end up in process arguments, so no ID token goes in them
+        params["login_hint"] = account.email
     if force_consent:
         params["prompt"] = "consent"
     return pending, f"{C.AUTHORIZE_URL}?{urlencode(params)}"
@@ -152,6 +155,8 @@ class IdTokenVerifier:
                                 options={"require": ["sub", "exp", "iat", "iss", "aud"]})
         except jwt.PyJWTError as e:
             raise AuthError(f"ID token rejected: {e}") from e
+        if claims.get("azp") not in (None, audience):
+            raise AuthError("ID token authorised party mismatch")
         if claims.get("nonce") != nonce:
             raise AuthError("ID token nonce mismatch")
         if not isinstance(claims.get("sub"), str) or not claims["sub"]:
@@ -211,12 +216,15 @@ async def complete(pending: PendingAuth | None, params: dict, http: httpx.AsyncC
             raise ClientMismatch("callback client_id differs from the selected registration")
         client_id = pending.client_id
 
+    if pending.is_registration and store.load(client_id) is None:
+        # keep the issued registration before the one-time code is spent, so a retry reuses it
+        store.save(Credential(client_id=client_id, subject="", ext_agent_host_id=pending.host_id))
     try:
         tok = await _token_request(http, {"grant_type": "authorization_code", "client_id": client_id, "code": code,
                                           "code_verifier": pending.code_verifier,
                                           "redirect_uri": pending.redirect_uri, "resource": C.RESOURCE})
     except (InvalidGrant, InvalidClient, TokenEndpointError) as e:
-        raise CodeExchangeRejected(f"code exchange for client {client_id[:10]}…: {e}") from e
+        raise CodeExchangeRejected(f"code exchange for client {client_id[:10]}…: {e}", client_id) from e
     if not isinstance(tok.get("id_token"), str) or not tok.get("access_token"):
         raise AuthError("token response missing id_token or access_token")
     claims = await verifier.verify(tok["id_token"], audience=client_id, nonce=pending.nonce)
@@ -225,7 +233,8 @@ async def complete(pending: PendingAuth | None, params: dict, http: httpx.AsyncC
 
     existing = store.load(client_id)
     base = existing or Credential(client_id=client_id, subject=claims["sub"], ext_agent_host_id=pending.host_id)
-    if existing and existing.subject != claims["sub"]:
+    base.subject = claims["sub"]
+    if existing and existing.subject and existing.subject != claims["sub"]:
         raise IdentityMismatch("stored registration belongs to another account")
     base.email = claims.get("email") or base.email
     base.name = claims.get("name") or base.name

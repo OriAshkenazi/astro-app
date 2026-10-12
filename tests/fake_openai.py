@@ -36,6 +36,7 @@ class FakeOpenAI:
     granted_scope: str = C.SCOPE
     id_token_overrides: dict = field(default_factory=dict)
     sign_with_other_key: bool = False
+    reject_next_exchanges: int = 0                     # answer invalid_grant to this many code exchanges
     revoke_status: list[int] = field(default_factory=lambda: [200])
     responses: list = field(default_factory=list)       # scripted Responses replies (see sse())
     models: list[dict] = field(default_factory=lambda: [
@@ -105,6 +106,9 @@ class FakeOpenAI:
             f = dict(parse_qsl(req.content.decode()))
             if f["grant_type"] == "authorization_code":
                 q = self.codes.pop(f["code"], None)
+                if self.reject_next_exchanges:
+                    self.reject_next_exchanges -= 1
+                    return httpx.Response(400, json={"error": "invalid_grant"})
                 challenge = base64.urlsafe_b64encode(hashlib.sha256(f["code_verifier"].encode()).digest()).rstrip(b"=").decode()
                 ok = (q and q["code_challenge"] == challenge and q["redirect_uri"] == f["redirect_uri"]
                       and f["resource"] == C.RESOURCE and f["client_id"] != C.DYNAMIC_CLIENT)

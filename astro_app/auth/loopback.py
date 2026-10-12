@@ -39,6 +39,7 @@ class CallbackListener:
     async def __aenter__(self):
         self._result = asyncio.get_running_loop().create_future()
         self._server = await asyncio.start_server(self._handle, C.CALLBACK_HOST, self.port)
+        self.port = self._server.sockets[0].getsockname()[1]  # the bound port when 0 was requested
         return self
 
     async def __aexit__(self, *exc):
