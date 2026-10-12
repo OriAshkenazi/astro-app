@@ -305,3 +305,8 @@ async def test_interactive_sign_in_gives_up_after_second_rejection(fake, store):
 def test_identity_only_url_requests_no_plan_scopes():
     _, url = oauth.start(REDIRECT, HOST, identity_only=True)
     assert _q(url)["scope"] == "openid profile email"
+
+
+def test_host_id_can_be_omitted():
+    _, url = oauth.start(REDIRECT, HOST, send_host_id=False)
+    assert "ext_agent_host_id" not in _q(url)

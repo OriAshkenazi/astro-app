@@ -106,8 +106,10 @@ class PendingAuth:
 
 
 def start(redirect_uri: str, host_id: str, account: Credential | None = None,
-          force_consent: bool = False, identity_only: bool = False) -> tuple[PendingAuth, str]:
-    """`identity_only` requests openid/profile/email without plan usage (diagnostics; no inference)."""
+          force_consent: bool = False, identity_only: bool = False,
+          send_host_id: bool = True) -> tuple[PendingAuth, str]:
+    """`identity_only` requests openid/profile/email without plan usage (diagnostics; no inference).
+    `send_host_id=False` omits ext_agent_host_id, as OpenAI's reference client does by default."""
     verifier = _b64url(secrets.token_bytes(32))  # 43 chars, as in the reference client
     pending = PendingAuth(state=_b64url(secrets.token_bytes(24)), nonce=_b64url(secrets.token_bytes(24)),
                           code_verifier=verifier, redirect_uri=redirect_uri,
@@ -116,8 +118,9 @@ def start(redirect_uri: str, host_id: str, account: Credential | None = None,
     params = {"client_id": pending.client_id, "response_type": "code", "redirect_uri": redirect_uri,
               "scope": " ".join(C.IDENTITY_SCOPES) if identity_only else C.SCOPE, "resource": C.RESOURCE, "state": pending.state, "nonce": pending.nonce,
               "code_challenge_method": "S256",
-              "code_challenge": _b64url(hashlib.sha256(verifier.encode()).digest()),
-              "ext_agent_host_id": host_id}
+              "code_challenge": _b64url(hashlib.sha256(verifier.encode()).digest())}
+    if send_host_id:
+        params["ext_agent_host_id"] = host_id
     if account is None:
         params["agent_name_hint"] = C.AGENT_NAME
     elif account.email:

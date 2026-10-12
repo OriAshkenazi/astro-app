@@ -39,12 +39,12 @@ def _pkce_ok(pending: oauth.PendingAuth, url: str) -> bool:
 async def sign_in(store: CredentialStore, http: httpx.AsyncClient, open_browser: OpenBrowser,
                   account: Credential | None = None, enable_plan: bool = False, log: Log = lambda m: None,
                   debug: Log | None = None, port: int | None = None, timeout: float | None = None,
-                  identity_only: bool = False) -> Credential:
+                  identity_only: bool = False, send_host_id: bool = True) -> Credential:
     host = hostid.host_id(store.dir.parent)
     for attempt in (1, 2):
         async with CallbackListener(port if port is not None else free_port()) as listener:
             pending, url = oauth.start(listener.redirect_uri, host, account, force_consent=enable_plan,
-                                       identity_only=identity_only)
+                                       identity_only=identity_only, send_host_id=send_host_id)
             opened = open_browser(url)
             if hasattr(opened, "__await__"):
                 opened = await opened

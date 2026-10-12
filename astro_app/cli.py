@@ -50,7 +50,8 @@ async def _login(args) -> int:
     async with httpx.AsyncClient() as http:
         try:
             cred = await sign_in(store, http, webbrowser.open, account, enable_plan=args.enable_plan, log=_out,
-                                 debug=debug, identity_only=args.identity_only)
+                                 debug=debug, identity_only=args.identity_only,
+                                 send_host_id=not args.no_host_id)
         except asyncio.TimeoutError:
             _out("Sign-in timed out after 10 minutes.")
             return 1
@@ -166,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--debug", action="store_true", help="print redacted diagnostics if sign-in fails")
     s.add_argument("--identity-only", action="store_true",
                    help="diagnostic: sign in without the ChatGPT plan permission (readings stay disabled)")
+    s.add_argument("--no-host-id", action="store_true",
+                   help="diagnostic: omit ext_agent_host_id, like OpenAI's reference client by default")
     sub.add_parser("accounts", help="list saved ChatGPT accounts")
     sub.add_parser("models", help="list models on your ChatGPT plan")
     s = sub.add_parser("ping", help="one tiny inference on your ChatGPT plan")
