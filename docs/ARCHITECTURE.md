@@ -1,43 +1,55 @@
 # Architecture
 
 ## Goal
-The app turns a hand-run, gated natal-chart pipeline into a web app:
-- A user signs in with ChatGPT and enters birth date, time and place.
-- They receive an interactive English reading that streams in section by section.
-- They can request a translation.
+The app turns a hand-run, gated natal-chart pipeline into a **local app**:
+- The user installs it and runs `astro-app`. It opens in their browser at `http://127.0.0.1`.
+- They sign in with ChatGPT and enter birth date, time and place (for themselves or anyone else; readings are saved locally).
+- They receive an interactive English reading that streams in section by section, and can request a translation.
 - All LLM calls run on the user's ChatGPT plan through **Sign in with ChatGPT (SIWC)**.
 
 Product decisions:
-- SIWC is the only LLM driver.
-- The quality mode (Standard / Thorough) and the translation language are user settings.
-- The client is a responsive web app.
+- **SIWC is the only LLM driver.** No API keys, no own billing.
+- **Local only.** This uses OpenAI's open-source SIWC track, which covers open-source and locally hosted apps and needs no partner application. A remotely hosted multi-user website would need OpenAI's partner interest form, so it is out of scope.
+- **Settings:** the quality mode (Standard / Thorough) and the translation language.
+- **UI:** responsive, so it also works from a phone on the same machine or network if the user chooses.
 
 ## System
 
 ```
-Next.js (web, responsive)  ──SSE──▶  FastAPI (Python)  ──▶  Postgres (users, charts, sections, jobs)
-        │  SIWC OAuth                      │                         ▲
-        └──────────────────────────────────┘                         │
-                                     Worker (Python, job DAG) ───────┘
-                                       ├─ core/ (astronomy, gates)
-                                       └─ LLM client → OpenAI via user's SIWC token
+Browser (web UI, static build)  ──HTTP + SSE──▶  local server (FastAPI, 127.0.0.1)
+                                                    ├─ SQLite (~/.astro-app/astro.db): readings, sections, jobs
+                                                    ├─ job runner (in-process asyncio DAG)
+                                                    │    ├─ core/ (astronomy, gates, wheel, sections 1–5)
+                                                    │    └─ LLM client → Responses API with the user's SIWC token
+                                                    └─ SIWC OAuth loopback callback (127.0.0.1)
 ```
 
-- **Backend:** Python, because the proven calculation code is Python (pyswisseph, Skyfield).
-- **Jobs:** a Postgres-backed queue (Procrastinate) runs a DAG per reading. Each node writes its result row and emits an event, and the API streams the events over SSE.
-- **Auth:**
-  - SIWC OAuth with PKCE. Refresh tokens are encrypted at rest.
-  - The worker refreshes tokens server-side, so jobs survive a closed tab.
-  - If an LLM call fails because the user's per-app cap is reached, the section is marked `paused_quota` and resumes when the user chooses.
-- **LLM interface:** one `LLMClient` interface, with SIWC as its only implementation. Self-hosters register their own SIWC client ID.
+- **Packaging:**
+  - `pipx install astro-app` (or `uvx astro-app`) provides an `astro-app` command. It starts the server on a free loopback port and opens the browser.
+  - The web UI is a static build shipped inside the Python package, so users never need Node.
+- **Storage:**
+  - Readings, sections and jobs live in SQLite under the user's data directory.
+  - Birth data never leaves the machine except in LLM requests, which go to OpenAI with `store: false`.
+- **Jobs:** an in-process asyncio runner executes a DAG per reading. Each node writes its row and emits an event, and the server streams events over SSE. Unfinished jobs resume on the next start.
+- **Auth (OpenAI open-source SIWC flow):**
+  - Before the first sign-in, the app generates and persists a stable `ext_agent_host_id`, either a UUID URN or a JWK-thumbprint URN.
+  - Sign-in is OIDC with PKCE: the system browser authorises, and the redirect goes to the app's `127.0.0.1` callback. The first sign-in registers the client dynamically, and the issued `client_id` is saved for reuse.
+  - The app validates the ID token and the granted scopes, then stores tokens in the OS keychain (`keyring`), falling back to a 0600 file.
+  - The app refreshes tokens itself, so a reading continues if the browser tab is closed.
+  - If the user's weekly per-app cap is reached, the affected section is marked `paused_quota` and resumes when the user chooses.
+  - **Running on a VM:** for a self-hosted VM, the user signs in locally and transfers the credential file over SSH, per OpenAI's self-hosted VM guide.
+- **LLM interface:**
+  - One `LLMClient` interface, with SIWC (Responses API, streaming, `store: false`) as the only real implementation.
+  - A deterministic fake implementation is used in tests and CI.
+  - OpenAI's SIWC DevKit is not used: its noncommercial licence is incompatible with AGPL. The flow is implemented from the public docs.
 
 ## Layout
 ```
 core/       pure-Python astronomy + gates (no web deps)
 agents/     prompts, style rules, glossaries, workflow DAG
-api/        FastAPI: auth, charts, sections, settings, SSE
-worker/     job tasks
-web/        Next.js App Router
+app/        local server: FastAPI routes, SSE, SQLite store, job runner, CLI entry point
+auth/       SIWC open-source OAuth flow, host ID, token store
+web/        web UI source (built to static files shipped in the package)
 tests/      unit, edge-case and (private-fixture) golden tests
 ```
 
@@ -72,7 +84,7 @@ tests/      unit, edge-case and (private-fixture) golden tests
 Every section version is stored with its SHA-256. Regenerating a section reuses the canonical data.
 
 ## Web UI
-- **Onboarding:** Sign in with ChatGPT → birth form → mode → Generate.
+- **Onboarding:** `astro-app` opens the browser → Continue with ChatGPT (consent to use the ChatGPT plan) → birth form → mode → Generate.
 - **Reading view:**
   - Layout: interactive wheel (sticky on desktop, collapsible on mobile) next to the section list.
   - Section list: a status chip on each entry, with skeletons for sections still being written.
@@ -80,19 +92,19 @@ Every section version is stored with its SHA-256. Regenerating a section reuses 
   - Glossary tooltips on technical terms.
   - Language toggle.
   - Aspect table with filters.
-- **Settings:** quality mode, default translation language, PDF export, account and data deletion.
-- **Privacy:** birth data is encrypted at rest, users can hard-delete it, and there is no analytics on chart content.
+- **Settings:** quality mode, default translation language, PDF export, sign out, and deletion of saved readings and credentials.
+- **Privacy:** everything is stored on the user's machine; there is no server of ours, no telemetry, and LLM requests use `store: false`.
 
 ## Milestones
 1. **Core:** two-engine calculation, G1 gate, canonical builder, sensitivity scan, wheel, deterministic tables, text checks.
-2. **SIWC auth and LLM client:** token store, refresh, quota handling.
-3. **Workflow and worker:** DAG, Standard mode, SSE, section storage and versioning.
+2. **SIWC auth and LLM client:** host ID, loopback OAuth with dynamic registration, keychain token store, refresh, quota handling, fake client for tests.
+3. **Local server and workflow:** CLI entry point, SQLite store, in-process job DAG, Standard mode, SSE, section versioning.
 4. **Web reading view.**
 5. **Thorough mode and translation.**
-6. **Polish:** PDF export, settings, deletion, self-hosting docs.
+6. **Polish:** PDF export, settings, deletion, packaging (`pipx`/`uvx`), self-hosted VM docs.
 
 ## Verification
 - Golden tests reproduce a hand-verified reference chart field-for-field. They are private and skipped in CI.
 - Edge-case tests: DST gap and overlap, unknown time, southern hemisphere, polar latitude.
 - Ported text checks must pass on the reference reading.
-- End-to-end: docker-compose stack plus a SIWC test account.
+- End-to-end: `astro-app` on a clean machine with a real ChatGPT Plus/Pro account; generate a reading in both modes and a translation.

@@ -1,8 +1,8 @@
 # astro-app
 
-An open-source natal-chart reading app. You sign in with ChatGPT, enter your birth date, time and place, and get a full interactive reading in English. Sections stream in as each one passes its quality gates, and you can ask for a translation.
+An open-source natal-chart reading app that runs on your own computer. You start it with `astro-app`, sign in with ChatGPT, enter a birth date, time and place, and get a full interactive reading in English in your browser. Sections stream in as each one passes its quality gates, and you can ask for a translation.
 
-The LLM work runs on **your own ChatGPT plan allowance** via *Sign in with ChatGPT*. The app holds no API keys of its own.
+The LLM work runs on **your own ChatGPT plan allowance** (Plus or Pro) through OpenAI's open-source *Sign in with ChatGPT* flow. There are no API keys, no server of ours, and your readings stay on your machine.
 
 ## How a reading is made
 
