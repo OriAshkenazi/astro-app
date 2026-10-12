@@ -57,6 +57,10 @@ async def _login(args) -> int:
             return 1
         except oauth.AuthError as e:
             _out(e.user_message)
+            if isinstance(e, oauth.CodeExchangeRejected) and not args.identity_only:
+                _out("If the browser said \"A required permission is unavailable\", your ChatGPT plan cannot share "
+                     "usage with astro-app (Free plans cannot, for apps OpenAI has not verified). Go, Plus and Pro "
+                     "can. Use `astro-app login --identity-only` to sign in without plan usage.")
             if not args.debug:
                 _out("Run `astro-app login --debug` for details to report.")
             return 1
