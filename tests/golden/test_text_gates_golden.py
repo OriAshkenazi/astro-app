@@ -2,7 +2,7 @@
 import pytest
 
 from conftest import REF
-from core.checks import check_against_chart, check_translation
+from astro_app.core.checks import check_against_chart, check_translation
 
 TAGS = {"Calculated fact": "עובדה מחושבת", "Traditional symbolism": "סמליות מסורתית",
         "Interpretive possibility": "אפשרות פרשנית"}

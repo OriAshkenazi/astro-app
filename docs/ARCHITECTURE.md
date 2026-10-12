@@ -45,10 +45,12 @@ Browser (web UI, static build)  ──HTTP + SSE──▶  local server (FastAPI
 
 ## Layout
 ```
-core/       pure-Python astronomy + gates (no web deps)
-agents/     prompts, style rules, glossaries, workflow DAG
-app/        local server: FastAPI routes, SSE, SQLite store, job runner, CLI entry point
-auth/       SIWC open-source OAuth flow, host ID, token store
+astro_app/
+  core/     pure-Python astronomy, gates, wheel, sections 1–5 (no web deps)
+  agents/   prompts, style rules, glossaries, workflow DAG
+  server/   local server: FastAPI routes, SSE, SQLite store, job runner, CLI entry point
+  auth/     SIWC open-source OAuth flow, host ID, token store
+  llm/      LLMClient interface, SIWC Responses client, fake client
 web/        web UI source (built to static files shipped in the package)
 tests/      unit, edge-case and (private-fixture) golden tests
 ```

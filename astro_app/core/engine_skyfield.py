@@ -14,6 +14,7 @@ from pathlib import Path
 from skyfield.api import Loader
 from skyfield.framelib import ecliptic_frame
 
+from .. import paths
 from .constants import ASPECT_ANGLES, PLANETS, house_of, norm, orb_limit, separation
 
 BODIES = dict(zip(PLANETS, ["sun", "moon", "mercury", "venus", "mars barycenter", "jupiter barycenter",
@@ -26,7 +27,7 @@ class PlacidusUndefined(ValueError):
 
 
 def ephe_dir() -> Path:
-    return Path(os.environ.get("ASTRO_EPHE_DIR", Path(__file__).resolve().parent.parent / "data"))
+    return paths.ephe_dir()
 
 
 @lru_cache(maxsize=1)

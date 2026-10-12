@@ -2,7 +2,7 @@ import datetime as dt
 
 import pytest
 
-from core.timeutil import LocalTimeError, resolve_local
+from astro_app.core.timeutil import LocalTimeError, resolve_local
 
 
 def test_nonexistent_local_time_asks_user():

@@ -4,9 +4,9 @@ import datetime as dt
 import pytest
 
 from conftest import REF
-from core.canonical import BirthInput, build_chart
-from core.checks import check_against_chart, split_sections
-from core.tables import deterministic_sections
+from astro_app.core.canonical import BirthInput, build_chart
+from astro_app.core.checks import check_against_chart, split_sections
+from astro_app.core.tables import deterministic_sections
 
 
 @pytest.fixture(scope="module")

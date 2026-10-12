@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from core.canonical import BirthInput, build_chart
+from astro_app.core.canonical import BirthInput, build_chart
 
 
 @pytest.fixture(scope="module")

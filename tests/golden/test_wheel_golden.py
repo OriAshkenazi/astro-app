@@ -4,7 +4,7 @@ import sys
 import pytest
 
 from conftest import REF
-from core.wheel import build_model, verify
+from astro_app.core.wheel import build_model, verify
 
 
 def test_layout_matches_reference_renderer(golden):

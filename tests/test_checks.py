@@ -1,4 +1,4 @@
-from core.checks import check_against_chart, check_translation, split_sections
+from astro_app.core.checks import check_against_chart, check_translation, split_sections
 
 CHART = {
     "birth": {"lat_dms": "10°00′00″N", "lon_dms": "20°00′00″E"},

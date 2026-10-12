@@ -1,7 +1,7 @@
 import datetime as dt
 import json
 
-from core.canonical import BirthInput, build_chart
+from astro_app.core.canonical import BirthInput, build_chart
 
 
 def test_unknown_time_noon_chart_without_houses():

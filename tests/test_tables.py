@@ -2,9 +2,9 @@ import datetime as dt
 
 import pytest
 
-from core.canonical import BirthInput, build_chart
-from core.checks import check_against_chart, split_sections
-from core.tables import _clock_changes, deterministic_sections
+from astro_app.core.canonical import BirthInput, build_chart
+from astro_app.core.checks import check_against_chart, split_sections
+from astro_app.core.tables import _clock_changes, deterministic_sections
 
 
 @pytest.fixture(scope="module")

@@ -15,7 +15,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - uses: actions/cache@v4
         with:
-          path: data/de421.bsp
+          path: ci-ephe/de421.bsp
           key: de421
       - run: pip install -e '.[dev]'
       - run: pytest -q
+        env:
+          ASTRO_HOME: ${{ runner.temp }}/astro-home
+          ASTRO_EPHE_DIR: ci-ephe

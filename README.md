@@ -23,9 +23,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and milesto
 
 Milestone 1 (core) is complete:
 - two-engine calculation with the G1 gate, canonical builder and birth-time sensitivity scan;
-- G2/G3 text gates (`core/checks.py`);
-- interactive SVG wheel with `data-factor` targets (`core/wheel.py`);
-- deterministic reading sections 1–5 (`core/tables.py`).
+- G2/G3 text gates (`astro_app/core/checks.py`);
+- interactive SVG wheel with `data-factor` targets (`astro_app/core/wheel.py`);
+- deterministic reading sections 1–5 (`astro_app/core/tables.py`).
 
 Next: Milestone 2, Sign in with ChatGPT and the LLM client.
 
@@ -37,7 +37,7 @@ pip install -e '.[dev]'
 pytest
 ```
 
-- **Ephemeris file:** the JPL DE421 kernel (`de421.bsp`, ~17 MB) is downloaded into `data/` on first use. Set `ASTRO_EPHE_DIR` to use an existing copy.
+- **Ephemeris file:** the JPL DE421 kernel (`de421.bsp`, ~17 MB) is downloaded into `~/.astro-app/ephe/` on first use (override the base with `ASTRO_HOME`). Set `ASTRO_EPHE_DIR` to use an existing copy.
 - **Golden tests:** these compare the pipeline against a privately held, hand-verified reference chart. They are skipped unless `ASTRO_REF_DIR` points at it. No personal birth data is stored in this repository.
 
 ## License

@@ -4,8 +4,8 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from core.canonical import BirthInput, build_chart
-from core.wheel import MIN_SEP_HARD, build_model, render_svg, verify
+from astro_app.core.canonical import BirthInput, build_chart
+from astro_app.core.wheel import MIN_SEP_HARD, build_model, render_svg, verify
 
 SVG = "{http://www.w3.org/2000/svg}"
 
