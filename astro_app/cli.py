@@ -21,8 +21,7 @@ import httpx
 
 from . import __version__
 from .auth import config as C
-from .auth import hostid, oauth
-from .auth.loopback import CallbackListener, free_port
+from .auth import oauth
 from .auth.session import AuthSession
 from .auth.store import CredentialStore
 
@@ -32,50 +31,38 @@ def _out(msg: str = "") -> None:
 
 
 async def _login(args) -> int:
+    from .auth.flow import sign_in
     store = CredentialStore()
+    saved = store.accounts()
     account = None
     if args.account:
-        account = next((a for a in store.accounts() if args.account in (a.client_id, a.email)), None)
+        account = next((a for a in saved if args.account in (a.client_id, a.email)), None)
         if account is None:
             _out(f"No saved account matches {args.account!r}. Run `astro-app accounts`.")
             return 2
-    host = hostid.host_id()
-    async with httpx.AsyncClient() as http, CallbackListener(free_port()) as listener:
-        pending, url = oauth.start(listener.redirect_uri, host, account, force_consent=args.enable_plan)
-        _out("Opening your browser to Continue with ChatGPT…")
-        if not webbrowser.open(url):
-            if account is None:  # no id_token_hint in the URL, safe to print
-                _out(f"Open this address in your browser:\n{url}")
-            else:
-                _out("Could not open a browser. Run `astro-app login` on a machine with a browser.")
-                return 1
+    elif not args.new and len(saved) == 1:
+        account = saved[0]  # reuse the existing registration instead of registering the app again
+    elif not args.new and len(saved) > 1:
+        _out("Several ChatGPT accounts are saved; choose one with --account, or add one with --new:")
+        return _accounts(args) or 2
+    _out("Opening your browser to Continue with ChatGPT…")
+    debug = (lambda m: _out("debug: " + m)) if args.debug else None
+    async with httpx.AsyncClient() as http:
         try:
-            params = await listener.wait()
-            if args.debug:
-                _out("debug: " + _redacted_callback(params, listener.redirect_uri))
-            cred = await oauth.complete(pending, params, http, store, oauth.IdTokenVerifier(http))
+            cred = await sign_in(store, http, webbrowser.open, account, enable_plan=args.enable_plan, log=_out,
+                                 debug=debug)
         except asyncio.TimeoutError:
             _out("Sign-in timed out after 10 minutes.")
             return 1
         except oauth.AuthError as e:
             _out(e.user_message)
-            if args.debug:
-                _out(f"debug: {type(e).__name__}: {e}")
-            else:
+            if not args.debug:
                 _out("Run `astro-app login --debug` for details to report.")
             return 1
     _out(f"Signed in as {cred.label()}.")
     _out("ChatGPT plan usage: " + ("enabled." if cred.plan_enabled else
                                    "NOT granted. Run `astro-app login --enable-plan` to grant it."))
     return 0
-
-
-def _redacted_callback(params: dict, redirect: str) -> str:
-    """Callback summary that is safe to share: parameter names, client-id prefix, scopes, never the code."""
-    shown = {k: ("<present>" if k in ("code", "state") else v) for k, v in params.items()}
-    if "client_id" in shown:
-        shown["client_id"] = shown["client_id"][:10] + "…"
-    return f"callback on {redirect} with {shown}"
 
 
 def _accounts(args) -> int:
@@ -86,7 +73,8 @@ def _accounts(args) -> int:
         _out("No ChatGPT accounts yet. Run `astro-app login`.")
     for a in rows:
         mark = "*" if active and a.client_id == active.client_id else " "
-        state = "signed in" if a.signed_in else "signed out"
+        state = "signed in" if a.signed_in else ("registered, sign-in not finished" if a.registered_only
+                                                 else "signed out")
         plan = "plan usage on" if a.plan_enabled else "plan usage off"
         _out(f"{mark} {a.label()}  [{state}, {plan}]")
     return 0
@@ -174,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("login", help="Continue with ChatGPT")
     s.add_argument("--account", help="email or client id of a saved account (default: register a new one)")
     s.add_argument("--enable-plan", action="store_true", help="ask again for ChatGPT plan usage after a decline")
+    s.add_argument("--new", action="store_true", help="register another ChatGPT account")
     s.add_argument("--debug", action="store_true", help="print redacted diagnostics if sign-in fails")
     sub.add_parser("accounts", help="list saved ChatGPT accounts")
     sub.add_parser("models", help="list models on your ChatGPT plan")
